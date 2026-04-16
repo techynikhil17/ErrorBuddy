@@ -80,6 +80,12 @@ export function buildFixSuggestions(
         "Add `.catch()` to handle the rejection.",
         "Or use try/catch with async/await.",
       ];
+    case "CONVEX_FUNCTION_NOT_FOUND":
+      return [
+        "Run `npx convex dev` to start the local Convex development server.",
+        "Check the function name and path — it must exactly match the exported function in your `convex/` directory.",
+        "Ensure the function is exported correctly (e.g. `export const myFn = query(...)`).",
+      ];
     default:
       return [
         "Search for the exact error message and inspect the raw context below.",

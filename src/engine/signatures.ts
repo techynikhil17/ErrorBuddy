@@ -146,6 +146,15 @@ export const ERROR_SIGNATURES: ErrorSignature[] = [
     match: (error) => /syntaxerror|unexpected token/i.test(`${error.type} ${error.message}`),
     extract: () => ({ systemCode: "SYNTAX" }),
   },
+  {
+    id: "convex-function-not-found",
+    category: "CONVEX_FUNCTION_NOT_FOUND",
+    confidence: 0.97,
+    match: (error) =>
+      (error.message.includes("Convex:") || error.message.includes("[Convex]")) &&
+      error.message.includes("Could not find public function"),
+    extract: () => ({ systemCode: "CONVEX_FUNCTION_NOT_FOUND" }),
+  },
 ];
 
 function buildHaystack(error: NormalizedError): string {
@@ -194,4 +203,33 @@ function extractPort(message: string): number | undefined {
 
   const port = Number(match[1]);
   return Number.isNaN(port) ? undefined : port;
+}
+
+/**
+ * Scans a (potentially multi-line) error message and returns the first line
+ * that contains a high-signal keyword.  This lets clix surface the most
+ * useful sentence from a long, noisy Convex / Django / framework stack trace
+ * instead of dumping the whole blob at the user.
+ *
+ * Keywords checked (case-insensitive):
+ *   "Could not find" | "Did you forget" | "not found" | "failed"
+ */
+export function extractKeyMessage(msg: string): string | null {
+  const SIGNAL_PATTERNS = [
+    /could not find/i,
+    /did you forget/i,
+    /not found/i,
+    /failed/i,
+  ];
+
+  const lines = msg.split(/\r?\n/);
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed && SIGNAL_PATTERNS.some((pattern) => pattern.test(trimmed))) {
+      return trimmed;
+    }
+  }
+
+  return null;
 }

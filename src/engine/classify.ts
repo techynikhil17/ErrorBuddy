@@ -14,6 +14,7 @@ export type ErrorCategory =
   | "HTTP_ERROR"
   | "COMMAND_CONFIG_ERROR"
   | "PROMISE_ERROR"
+  | "CONVEX_FUNCTION_NOT_FOUND"
   | "UNKNOWN";
 
 export interface ClassifiedError {

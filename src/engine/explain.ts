@@ -1,5 +1,6 @@
 import { ClassifiedError, classifyError, classifyHttpStatus, extractStatusCode } from "./classify";
 import { NormalizedError } from "./normalize";
+import { extractKeyMessage } from "./signatures";
 
 export interface ExplainedError {
   title: string;
@@ -150,6 +151,17 @@ export function explainError(
         why: "The asynchronous failure bubbled up without a surrounding try/catch or `.catch()` handler.",
         ...shared,
       };
+    case "CONVEX_FUNCTION_NOT_FOUND": {
+      const keyLine = extractKeyMessage(error.message);
+      return {
+        title: "Convex Function Not Found",
+        what: keyLine
+          ? keyLine
+          : "The requested Convex function is not available.",
+        why: "The function may not be deployed yet, the local dev server is not running, or the function name / path is incorrect.",
+        ...shared,
+      };
+    }
     default:
       return {
         title: "Runtime Execution Error",
