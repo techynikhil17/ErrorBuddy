@@ -188,6 +188,123 @@ export function explainError(
         ...shared,
       };
     }
+    case "PRISMA_ERROR": {
+      const code = classified.details.systemCode;
+      const prismaWhat =
+        code === "P2002"
+          ? "A unique constraint violation occurred — the value already exists in the database."
+          : code === "P2025"
+            ? "The record you are trying to read, update, or delete does not exist."
+            : code === "PRISMA_INIT"
+              ? "Prisma could not reach the database server."
+              : "A Prisma database query failed.";
+      const prismaWhy =
+        code === "P2002"
+          ? "Duplicate data was inserted into a column that enforces uniqueness."
+          : code === "P2025"
+            ? "The target record was not found — it may have been deleted or the ID is wrong."
+            : code === "PRISMA_INIT"
+              ? "The database URL in your .env is unreachable, misconfigured, or the server is down."
+              : `Prisma error code ${code ?? "unknown"} — inspect the full message for details.`;
+
+      return {
+        title: "Database Query Failed",
+        what: prismaWhat,
+        why: prismaWhy,
+        ...shared,
+      };
+    }
+    case "DOCKER_ERROR": {
+      const sub = classified.details.systemCode;
+      return {
+        title: "Docker Error",
+        what:
+          sub === "DOCKER_IMAGE_NOT_FOUND"
+            ? "The specified Docker image could not be found locally."
+            : "The Docker daemon returned an error.",
+        why:
+          sub === "DOCKER_IMAGE_NOT_FOUND"
+            ? "The image has not been pulled yet and Docker could not find it in the configured registry."
+            : "The Docker daemon may not be running, or the request was malformed.",
+        ...shared,
+      };
+    }
+    case "PYTHON_ERROR": {
+      const pyEntity = extractEntity(error.message);
+      const isPyImport = classified.details.systemCode === "PYTHON_IMPORT";
+      return {
+        title: "Python Runtime Error",
+        what: isPyImport && classified.details.moduleName
+          ? `Python module '${classified.details.moduleName}' is not installed.`
+          : pyEntity
+            ? `Python raised: ${error.message}`
+            : "A Python runtime error occurred.",
+        why: isPyImport
+          ? "The module is missing from the active Python environment."
+          : "An unhandled exception was raised during Python execution.",
+        ...shared,
+      };
+    }
+    case "GO_PANIC":
+      return {
+        title: "Go Runtime Panic",
+        what: error.message.startsWith("panic:")
+          ? error.message
+          : `Go panicked: ${error.message}`,
+        why: "An unrecovered panic was triggered. This is a hard crash in the Go runtime.",
+        ...shared,
+      };
+    case "OUT_OF_MEMORY":
+      return {
+        title: "Out of Memory",
+        what: "The process ran out of available memory and was terminated.",
+        why: "The heap limit was reached. This can happen with large datasets, memory leaks, or insufficient NODE_OPTIONS.",
+        ...shared,
+      };
+    case "DISK_FULL":
+      return {
+        title: "Disk Full",
+        what: "There is no space left on the disk or volume.",
+        why: "The target filesystem is at 100% capacity — writes are being rejected by the OS.",
+        ...shared,
+      };
+    case "BUILD_ERROR": {
+      const buildCode = classified.details.systemCode;
+      return {
+        title: "Build Failed",
+        what:
+          buildCode === "WEBPACK_BUILD"
+            ? "Webpack could not build one or more modules."
+            : buildCode === "GO_BUILD"
+              ? "The Go build step failed due to a compilation error."
+              : buildCode?.startsWith("TS")
+                ? `TypeScript compilation failed (${buildCode}).`
+                : "The build step failed due to a compilation error.",
+        why:
+          buildCode === "WEBPACK_BUILD"
+            ? "A missing dependency or import path caused Webpack to abort the bundle."
+            : buildCode === "GO_BUILD"
+              ? "A syntax or type error in a .go file prevented compilation."
+              : "A type mismatch, missing import, or invalid syntax was detected by the compiler.",
+        ...shared,
+      };
+    }
+    case "DATABASE_ERROR":
+      return {
+        title: "Database Connection Failed",
+        what: "The application could not authenticate with or connect to the database.",
+        why: "The credentials, role, or database URL are incorrect, or the Postgres server is not running.",
+        ...shared,
+      };
+    case "PORT_CONFLICT":
+      return {
+        title: "Port Already In Use",
+        what: classified.details.port
+          ? `Another process is already listening on port ${classified.details.port}.`
+          : "The requested port is already in use by another process.",
+        why: "Two processes cannot bind to the same address + port simultaneously.",
+        ...shared,
+      };
     default:
       return {
         title: "Runtime Execution Error",
@@ -197,6 +314,7 @@ export function explainError(
       };
   }
 }
+
 
 function buildHttpCause(statusCategory: ReturnType<typeof classifyHttpStatus>): string {
   if (statusCategory === "SERVER_ERROR") {

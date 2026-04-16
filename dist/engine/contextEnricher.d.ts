@@ -9,5 +9,6 @@ export interface ErrorContext {
     statusCode?: number;
     jsonToken?: string;
     jsonPosition?: number;
+    port?: number;
 }
 export declare function enrichErrorContext(message: string, location?: StackLocation): ErrorContext;

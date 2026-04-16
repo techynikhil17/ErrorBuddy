@@ -13,6 +13,7 @@ export interface ErrorContext {
   statusCode?: number;
   jsonToken?: string;
   jsonPosition?: number;
+  port?: number;
 }
 
 export function enrichErrorContext(message: string, location?: StackLocation): ErrorContext {

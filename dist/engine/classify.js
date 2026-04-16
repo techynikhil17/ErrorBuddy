@@ -1,10 +1,11 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.classifyHttpStatus = exports.extractStatusCode = exports.isHttpError = void 0;
 exports.classifyError = classifyError;
-exports.isHttpError = isHttpError;
-exports.extractStatusCode = extractStatusCode;
-exports.classifyHttpStatus = classifyHttpStatus;
 const signatures_1 = require("./signatures");
+Object.defineProperty(exports, "classifyHttpStatus", { enumerable: true, get: function () { return signatures_1.classifyHttpStatus; } });
+Object.defineProperty(exports, "extractStatusCode", { enumerable: true, get: function () { return signatures_1.extractStatusCode; } });
+Object.defineProperty(exports, "isHttpError", { enumerable: true, get: function () { return signatures_1.isHttpError; } });
 function classifyError(error) {
     const bestMatch = signatures_1.ERROR_SIGNATURES
         .filter((signature) => signature.match(error))
@@ -23,29 +24,5 @@ function classifyError(error) {
         confidence: bestMatch.confidence,
         details: bestMatch.extract(error),
     };
-}
-function isHttpError(message) {
-    return (message.includes("Request failed with status code") ||
-        message.includes("Network response was not ok") ||
-        (message.includes("AxiosError") && message.includes("status")));
-}
-function extractStatusCode(message) {
-    const match = message.match(/status code (\d{3})/i);
-    return match ? parseInt(match[1], 10) : null;
-}
-function classifyHttpStatus(status) {
-    if (!status) {
-        return "UNKNOWN";
-    }
-    if (status >= 500) {
-        return "SERVER_ERROR";
-    }
-    if (status >= 400) {
-        return "CLIENT_ERROR";
-    }
-    if (status >= 300) {
-        return "REDIRECTION";
-    }
-    return "UNKNOWN";
 }
 //# sourceMappingURL=classify.js.map

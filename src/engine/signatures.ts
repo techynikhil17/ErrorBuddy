@@ -155,18 +155,145 @@ export const ERROR_SIGNATURES: ErrorSignature[] = [
       error.message.includes("Could not find public function"),
     extract: () => ({ systemCode: "CONVEX_FUNCTION_NOT_FOUND" }),
   },
+  // ─── Prisma ───────────────────────────────────────────────────────────────
+  {
+    id: "prisma-query-error",
+    category: "PRISMA_ERROR",
+    confidence: 0.97,
+    match: (error) => /PrismaClientKnownRequestError|\bP\d{4}\b/.test(buildHaystack(error)),
+    extract: (error) => ({
+      systemCode: (error.message.match(/\b(P\d{4})\b/)?.[1]) ?? "PRISMA_QUERY",
+    }),
+  },
+  {
+    id: "prisma-init-error",
+    category: "PRISMA_ERROR",
+    confidence: 0.96,
+    match: (error) =>
+      /PrismaClientInitializationError|Can't reach database server/i.test(buildHaystack(error)),
+    extract: (error) => ({
+      systemCode: "PRISMA_INIT",
+      port: extractPort(error.message),
+    }),
+  },
+  // ─── Docker ───────────────────────────────────────────────────────────────
+  {
+    id: "docker-daemon-error",
+    category: "DOCKER_ERROR",
+    confidence: 0.96,
+    match: (error) =>
+      /Error response from daemon:|Cannot connect to the Docker daemon/i.test(buildHaystack(error)),
+    extract: () => ({ systemCode: "DOCKER_DAEMON" }),
+  },
+  {
+    id: "docker-image-not-found",
+    category: "DOCKER_ERROR",
+    confidence: 0.95,
+    match: (error) => /Unable to find image/.test(error.message) && /locally/i.test(error.message),
+    extract: () => ({ systemCode: "DOCKER_IMAGE_NOT_FOUND" }),
+  },
+  // ─── Python ───────────────────────────────────────────────────────────────
+  {
+    id: "python-traceback",
+    category: "PYTHON_ERROR",
+    confidence: 0.95,
+    match: (error) =>
+      /Traceback \(most recent call last\):|File ".+?\.py", line/i.test(buildHaystack(error)),
+    extract: () => ({ systemCode: "PYTHON_TRACEBACK" }),
+  },
+  {
+    id: "python-import-error",
+    category: "PYTHON_ERROR",
+    confidence: 0.96,
+    match: (error) => /ModuleNotFoundError: No module named/i.test(buildHaystack(error)),
+    extract: (error) => ({
+      systemCode: "PYTHON_IMPORT",
+      moduleName: error.message.match(/No module named ['"](.*?)['"]/i)?.[1],
+    }),
+  },
+  // ─── Go ───────────────────────────────────────────────────────────────────
+  {
+    id: "go-panic",
+    category: "GO_PANIC",
+    confidence: 0.95,
+    match: (error) => /panic:/.test(error.message) && /goroutine \d+/.test(error.message),
+    extract: () => ({ systemCode: "GO_PANIC" }),
+  },
+  {
+    id: "go-build-error",
+    category: "BUILD_ERROR",
+    confidence: 0.94,
+    match: (error) => /\.go:\d+:\d+:|build failed/i.test(buildHaystack(error)),
+    extract: () => ({ systemCode: "GO_BUILD" }),
+  },
+  // ─── System resources ─────────────────────────────────────────────────────
+  {
+    id: "out-of-memory",
+    category: "OUT_OF_MEMORY",
+    confidence: 0.97,
+    match: (error) =>
+      /ENOMEM|out of memory|JavaScript heap out of memory/i.test(buildHaystack(error)),
+    extract: () => ({ systemCode: "ENOMEM" }),
+  },
+  {
+    id: "disk-full",
+    category: "DISK_FULL",
+    confidence: 0.98,
+    match: (error) => /ENOSPC|no space left on device/i.test(buildHaystack(error)),
+    extract: () => ({ systemCode: "ENOSPC" }),
+  },
+  {
+    id: "port-conflict-generic",
+    category: "PORT_CONFLICT",
+    confidence: 0.97,
+    match: (error) => /address already in use|\beaddrinuse\b/i.test(buildHaystack(error)),
+    extract: (error) => ({
+      systemCode: "EADDRINUSE",
+      port: extractPort(error.message),
+    }),
+  },
+  // ─── Database (generic) ───────────────────────────────────────────────────
+  {
+    id: "db-connection",
+    category: "DATABASE_ERROR",
+    confidence: 0.96,
+    match: (error) =>
+      /FATAL: password authentication failed|FATAL: role .+ does not exist|could not connect to server/i.test(
+        buildHaystack(error),
+      ),
+    extract: () => ({ systemCode: "DB_CONNECTION" }),
+  },
+  // ─── TypeScript / build tools ─────────────────────────────────────────────
+  {
+    id: "ts-type-error",
+    category: "BUILD_ERROR",
+    confidence: 0.95,
+    match: (error) => /error TS\d+:/i.test(buildHaystack(error)),
+    extract: (error) => ({
+      systemCode: error.message.match(/error (TS\d+):/i)?.[1] ?? "TS_ERROR",
+    }),
+  },
+  {
+    id: "webpack-build-error",
+    category: "BUILD_ERROR",
+    confidence: 0.93,
+    match: (error) =>
+      /Module build failed|ModuleNotFoundError/i.test(buildHaystack(error)) &&
+      /webpack/i.test(buildHaystack(error)),
+    extract: () => ({ systemCode: "WEBPACK_BUILD" }),
+  },
 ];
 
 function buildHaystack(error: NormalizedError): string {
   return `${error.type} ${error.message}`.toLowerCase();
 }
 
-function extractStatusCode(message: string): number | null {
+export function extractStatusCode(message: string): number | null {
   const match = message.match(/status code (\d{3})/i);
   return match ? parseInt(match[1], 10) : null;
 }
 
-function classifyHttpStatus(status: number | null): HttpStatusCategory {
+export function classifyHttpStatus(status: number | null): HttpStatusCategory {
   if (!status) {
     return "UNKNOWN";
   }
@@ -186,7 +313,7 @@ function classifyHttpStatus(status: number | null): HttpStatusCategory {
   return "UNKNOWN";
 }
 
-function isHttpError(message: string): boolean {
+export function isHttpError(message: string): boolean {
   return (
     message.includes("Request failed with status code") ||
     message.includes("Network response was not ok") ||

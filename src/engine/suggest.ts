@@ -86,6 +86,87 @@ export function buildFixSuggestions(
         "Check the function name and path — it must exactly match the exported function in your `convex/` directory.",
         "Ensure the function is exported correctly (e.g. `export const myFn = query(...)`).",
       ];
+    case "PRISMA_ERROR": {
+      const code = classified.details.systemCode;
+      if (code === "P2002") {
+        return [
+          "A record with this value already exists. Check for duplicate data before inserting.",
+          "Use `upsert` instead of `create` if the record may already exist.",
+        ];
+      }
+      if (code === "P2025") {
+        return [
+          "The record you're trying to update or delete does not exist. Verify the ID.",
+          "Add a `findUnique` check before the mutation to confirm the record is present.",
+        ];
+      }
+      if (code === "PRISMA_INIT") {
+        return [
+          "Check your DATABASE_URL in .env and confirm the database server is running.",
+          "Run `npx prisma migrate dev` to ensure the database is initialised.",
+        ];
+      }
+      return [
+        "Inspect the Prisma error code in the message and consult https://www.prisma.io/docs/reference/api-reference/error-reference.",
+        "Run `npx prisma studio` to inspect the database state visually.",
+      ];
+    }
+    case "DOCKER_ERROR":
+      return [
+        "Run `docker ps` to check whether the Docker daemon is running.",
+        "Run `docker pull <image>` to pull the missing image before starting the container.",
+        "Run `docker system prune` to free up space if the issue is disk-related.",
+      ];
+    case "PYTHON_ERROR":
+      if (classified.details.systemCode === "PYTHON_IMPORT") {
+        return [
+          `Run \`pip install ${classified.details.moduleName ?? "<module>"}\` to install the missing package.`,
+          "Activate the correct virtual environment: `source .venv/bin/activate` (or `.venv\\Scripts\\activate` on Windows).",
+        ];
+      }
+      return [
+        "Read the full Python traceback above to find the file and line number.",
+        "Add a try/except block around the failing code to handle the exception gracefully.",
+      ];
+    case "GO_PANIC":
+      return [
+        "Read the goroutine dump above to find the exact line that panicked.",
+        "Add `recover()` inside a deferred function to catch the panic if it is expected.",
+        "Check for nil pointer dereferences and index-out-of-range accesses.",
+      ];
+    case "OUT_OF_MEMORY":
+      return [
+        "Increase the Node.js heap: `NODE_OPTIONS=--max-old-space-size=4096 <cmd>`",
+        "Profile memory usage with `node --inspect` and Chrome DevTools to find the leak.",
+        "Process large datasets in smaller chunks instead of loading them all at once.",
+      ];
+    case "DISK_FULL":
+      return [
+        "Run `df -h` (Linux/Mac) or `Get-PSDrive` (Windows) to find which volume is full.",
+        "Clear Docker images and containers: `docker system prune -af`.",
+        "Remove build artefacts and caches: `rm -rf node_modules dist .cache`.",
+      ];
+    case "BUILD_ERROR":
+      return [
+        "Fix the reported type or syntax error in the source file, then rebuild.",
+        "Run `npx tsc --noEmit` for a full diagnostic listing of all type errors.",
+        classified.details.systemCode === "WEBPACK_BUILD"
+          ? "Run `npm install` to ensure all dependencies referenced in the bundle are present."
+          : "Check that all imported modules are installed and paths are spelled correctly.",
+      ];
+    case "DATABASE_ERROR":
+      return [
+        "Check your DATABASE_URL in .env — it must match a running Postgres instance.",
+        "Run `psql -U postgres` to verify the role exists and the server is accepting connections.",
+        "Confirm the database user has been granted the necessary privileges.",
+      ];
+    case "PORT_CONFLICT":
+      return [
+        classified.details.port
+          ? `Stop the process using port ${classified.details.port}: find it with \`lsof -i :${classified.details.port}\` (Mac/Linux) or \`netstat -ano | findstr :${classified.details.port}\` (Windows).`
+          : "Find and stop the conflicting process with `lsof -i` or `netstat -ano`.",
+        "Or configure this service to listen on a different port.",
+      ];
     default:
       return [
         "Search for the exact error message and inspect the raw context below.",
@@ -93,6 +174,7 @@ export function buildFixSuggestions(
       ];
   }
 }
+
 
 function buildUndefinedFixes(error: NormalizedError): string[] {
   const optionalChainExample = buildOptionalChain(

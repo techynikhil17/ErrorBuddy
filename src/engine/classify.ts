@@ -1,5 +1,11 @@
 import { NormalizedError } from "./normalize";
-import { ERROR_SIGNATURES, SignatureExtract } from "./signatures";
+import {
+  ERROR_SIGNATURES,
+  SignatureExtract,
+  classifyHttpStatus,
+  extractStatusCode,
+  isHttpError,
+} from "./signatures";
 
 export type ErrorCategory =
   | "NETWORK_ERROR"
@@ -15,6 +21,15 @@ export type ErrorCategory =
   | "COMMAND_CONFIG_ERROR"
   | "PROMISE_ERROR"
   | "CONVEX_FUNCTION_NOT_FOUND"
+  | "PRISMA_ERROR"
+  | "DOCKER_ERROR"
+  | "PYTHON_ERROR"
+  | "GO_PANIC"
+  | "OUT_OF_MEMORY"
+  | "DISK_FULL"
+  | "BUILD_ERROR"
+  | "DATABASE_ERROR"
+  | "PORT_CONFLICT"
   | "UNKNOWN";
 
 export interface ClassifiedError {
@@ -52,35 +67,5 @@ export type HttpStatusCategory =
   | "REDIRECTION"
   | "UNKNOWN";
 
-export function isHttpError(message: string): boolean {
-  return (
-    message.includes("Request failed with status code") ||
-    message.includes("Network response was not ok") ||
-    (message.includes("AxiosError") && message.includes("status"))
-  );
-}
-
-export function extractStatusCode(message: string): number | null {
-  const match = message.match(/status code (\d{3})/i);
-  return match ? parseInt(match[1], 10) : null;
-}
-
-export function classifyHttpStatus(status: number | null): HttpStatusCategory {
-  if (!status) {
-    return "UNKNOWN";
-  }
-
-  if (status >= 500) {
-    return "SERVER_ERROR";
-  }
-
-  if (status >= 400) {
-    return "CLIENT_ERROR";
-  }
-
-  if (status >= 300) {
-    return "REDIRECTION";
-  }
-
-  return "UNKNOWN";
-}
+// Re-export from signatures so call sites that import from classify continue to work.
+export { isHttpError, extractStatusCode, classifyHttpStatus };

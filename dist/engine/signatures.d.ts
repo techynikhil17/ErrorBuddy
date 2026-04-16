@@ -20,6 +20,9 @@ export interface ErrorSignature {
     extract: (error: NormalizedError) => SignatureExtract;
 }
 export declare const ERROR_SIGNATURES: ErrorSignature[];
+export declare function extractStatusCode(message: string): number | null;
+export declare function classifyHttpStatus(status: number | null): HttpStatusCategory;
+export declare function isHttpError(message: string): boolean;
 /**
  * Scans a (potentially multi-line) error message and returns the first line
  * that contains a high-signal keyword.  This lets clix surface the most
