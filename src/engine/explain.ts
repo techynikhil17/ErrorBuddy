@@ -1,4 +1,5 @@
 import { ClassifiedError, classifyError, classifyHttpStatus, extractStatusCode } from "./classify";
+import { extractEntity, detectEntityType } from "./entityExtractor";
 import { NormalizedError } from "./normalize";
 import { extractKeyMessage } from "./signatures";
 
@@ -38,14 +39,16 @@ export function explainError(
           : "The host is reachable, but the target port is closed or the service is down.",
         ...shared,
       };
-    case "UNDEFINED_ERROR":
+    case "UNDEFINED_ERROR": {
       if (error.context.accessedProperty) {
         const accessedProperty = error.context.accessedProperty;
         const variableName = classified.details.variableName ?? error.context.rootObject;
 
         return {
           title: "Undefined Property Access",
-          what: `You're trying to access "${accessedProperty}" on an undefined object.`,
+          what: variableName
+            ? `variable '${variableName}' is undefined — cannot access property '${accessedProperty}' on it.`
+            : `You're trying to access property '${accessedProperty}' on an undefined value.`,
           why: variableName
             ? `'${variableName}' is undefined at this point.`
             : "The parent object is undefined at this point.",
@@ -53,21 +56,37 @@ export function explainError(
         };
       }
 
+      const undefinedEntity = extractEntity(error.message);
+      const undefinedEntityType = undefinedEntity
+        ? detectEntityType(error.message)
+        : "resource";
+
       return {
         title: "Undefined Value Accessed",
-        what: "The command tried to use a variable or object property before it was defined.",
+        what: undefinedEntity
+          ? `${undefinedEntityType} '${undefinedEntity}' does not exist or is not available.`
+          : "The command tried to use a variable or object property before it was defined.",
         why: "A value flowing into this code path is missing or was never initialized.",
         ...shared,
       };
-    case "FILE_NOT_FOUND":
+    }
+    case "FILE_NOT_FOUND": {
+      const fileEntity =
+        classified.details.moduleName ??
+        extractEntity(error.message);
+      const fileEntityType = fileEntity
+        ? detectEntityType(error.message.includes("directory") ? "file" : error.message)
+        : "file";
+
       return {
         title: "File Not Found",
-        what: classified.details.moduleName
-          ? `File '${classified.details.moduleName}' could not be found.`
+        what: fileEntity
+          ? `${fileEntityType} '${fileEntity}' could not be found.`
           : "A file or directory required by the command could not be found.",
         why: "The referenced path does not exist from the current working directory or the path is misspelled.",
         ...shared,
       };
+    }
     case "PERMISSION_DENIED":
       return {
         title: "Permission Denied",
@@ -107,17 +126,22 @@ export function explainError(
         why: "The input contains invalid JSON syntax, a truncated payload, or unexpected characters.",
         ...shared,
       };
-    case "MODULE_NOT_FOUND":
+    case "MODULE_NOT_FOUND": {
+      const moduleEntity =
+        classified.details.moduleName ??
+        extractEntity(error.message);
+
       return {
         title: "Module Not Found",
-        what: classified.details.moduleName
-          ? `File '${classified.details.moduleName}' does not exist in the current directory.`
+        what: moduleEntity
+          ? `module '${moduleEntity}' does not exist or could not be resolved.`
           : "Node.js cannot locate the specified file or dependency.",
-        why: classified.details.moduleName
-          ? `File '${classified.details.moduleName}' does not exist in the current directory.`
+        why: moduleEntity
+          ? `module '${moduleEntity}' is not installed or the path is incorrect.`
           : "The runtime could not resolve the module path or package from the current working directory.",
         ...shared,
       };
+    }
     case "HTTP_ERROR": {
       const statusCode = classified.details.statusCode ?? extractStatusCode(error.message);
       const statusCategory =
@@ -153,11 +177,13 @@ export function explainError(
       };
     case "CONVEX_FUNCTION_NOT_FOUND": {
       const keyLine = extractKeyMessage(error.message);
+      const convexEntity = keyLine ? extractEntity(keyLine) : extractEntity(error.message);
+
       return {
         title: "Convex Function Not Found",
-        what: keyLine
-          ? keyLine
-          : "The requested Convex function is not available.",
+        what: convexEntity
+          ? `function '${convexEntity}' does not exist or is not available in Convex.`
+          : keyLine ?? "The requested Convex function is not available.",
         why: "The function may not be deployed yet, the local dev server is not running, or the function name / path is incorrect.",
         ...shared,
       };
