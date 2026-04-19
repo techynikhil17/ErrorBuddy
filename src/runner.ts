@@ -25,7 +25,8 @@ const DEDUP_NOTICE_THRESHOLD = 3;
  * Matches lines that signal the start of a new error block.
  * Anchored patterns prevent false positives from embedded codes or throw statements.
  */
-const BLOCK_START_RE = /^\s*(TypeError|SyntaxError|ReferenceError|RangeError|URIError|EvalError|Error:|FATAL|Exception in thread|Traceback \(most recent call last\)|panic:|Error response from daemon|PrismaClientKnownRequestError|PrismaClientInitializationError|error TS\d+|UnhandledPromiseRejection)/i;
+const BLOCK_START_RE =
+  /^\s*(TypeError|SyntaxError|ReferenceError|RangeError|URIError|EvalError|Error:|FATAL|FATAL ERROR|Exception in thread|Traceback \(most recent call last\)|panic:|goroutine \d+ \[|thread '.+' panicked at|error\[E\d+\]|Error response from daemon|PrismaClientKnownRequestError|PrismaClientInitializationError|error TS\d+|UnhandledPromiseRejection|ECONNREFUSED|ENOENT|EADDRINUSE|EACCES|ENOMEM|ENOSPC|ModuleNotFoundError|ImportError|NullPointerException|OutOfMemoryError|ActionController::|ActiveRecord::|Error: Failed to compile|\[ Error \])/i;
 
 // ─── Dedup state ──────────────────────────────────────────────────────────────
 
@@ -66,7 +67,8 @@ function renderBlock(raw: string, dedupMap: Map<string, DedupEntry>): boolean {
 
   const explained = explainError(normalized, classified);
   const fixes = buildFixSuggestions(classified, normalized);
-  process.stderr.write(formatErrorOutput(explained, normalized, classified, fixes));
+  const output = formatErrorOutput(explained, normalized, classified, fixes);
+  process.stderr.write(output.endsWith("\n") ? output + "\n" : output + "\n\n");
   return true;
 }
 

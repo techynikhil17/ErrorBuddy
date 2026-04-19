@@ -5,6 +5,7 @@ type DetectedRuntime =
   | "python"
   | "go"
   | "java"
+  | "rust"
   | "docker"
   | "prisma"
   | "node";
@@ -27,6 +28,9 @@ function detectRuntime(raw: string): DetectedRuntime {
   if (/PrismaClientKnownRequestError|PrismaClientInitializationError|\bP\d{4}\b/i.test(raw)) {
     return "prisma";
   }
+  if (/error\[E\d+\]|thread '.+' panicked at|\.rs:\d+/i.test(raw)) {
+    return "rust";
+  }
   return "node";
 }
 
@@ -37,6 +41,7 @@ function runtimeToErrorType(runtime: DetectedRuntime): string {
     case "python":  return "PythonTraceback";
     case "go":      return "GoRuntimePanic";
     case "java":    return "JavaException";
+    case "rust":    return "RustError";
     case "docker":  return "DockerError";
     case "prisma":  return "PrismaClientKnownRequestError";
     case "node":    return "NodeError";

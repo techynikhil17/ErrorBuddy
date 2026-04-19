@@ -104,6 +104,20 @@ function formatVerboseErrorOutput(
     sectionDivider,
     chalk.gray("🧭 Signature"),
     chalk.gray(`${classified.signatureId} (${Math.round(classified.confidence * 100)}% confidence)`),
+  );
+
+  const runtimeLabel = runtimeFromType(normalized.type);
+
+  if (runtimeLabel) {
+    lines.push(
+      "",
+      sectionDivider,
+      chalk.gray("🌐 Runtime"),
+      chalk.gray(runtimeLabel),
+    );
+  }
+
+  lines.push(
     "",
     sectionDivider,
     chalk.gray("🔎 Raw Error"),
@@ -135,4 +149,18 @@ function formatCodeSnippet(normalized: NormalizedError): string | undefined {
 
   const cleaned = stripLeadIn(snippet);
   return cleaned.includes("👉") ? cleaned : `👉 ${cleaned}`;
+}
+
+function runtimeFromType(type: string): string | undefined {
+  const map: Record<string, string> = {
+    PythonTraceback: "Python",
+    GoRuntimePanic: "Go",
+    JavaException: "Java / JVM",
+    DockerError: "Docker",
+    PrismaClientKnownRequestError: "Prisma / Node.js",
+    RustError: "Rust",
+    NodeError: "Node.js",
+  };
+
+  return map[type];
 }

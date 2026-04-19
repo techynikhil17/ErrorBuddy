@@ -20,6 +20,8 @@ export type ErrorCategory =
   | "HTTP_ERROR"
   | "COMMAND_CONFIG_ERROR"
   | "PROMISE_ERROR"
+  | "RUST_ERROR"
+  | "JAVA_ERROR"
   | "CONVEX_FUNCTION_NOT_FOUND"
   | "PRISMA_ERROR"
   | "DOCKER_ERROR"
@@ -30,6 +32,8 @@ export type ErrorCategory =
   | "BUILD_ERROR"
   | "DATABASE_ERROR"
   | "PORT_CONFLICT"
+  | "RAILS_ERROR"
+  | "NEXTJS_ERROR"
   | "UNKNOWN";
 
 export interface ClassifiedError {

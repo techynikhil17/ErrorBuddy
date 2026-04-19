@@ -25,5 +25,17 @@ const clix_1 = require("./core/clix");
     .action(() => {
     throw new Error("Request failed with status code 500");
 });
+(0, clix_1.clix)()
+    .command("pyimport", "Simulate a Python missing-module error.")
+    .action(() => {
+    throw Object.assign(new Error("ModuleNotFoundError: No module named 'requests'"), {
+        name: "PythonTraceback",
+    });
+});
+(0, clix_1.clix)()
+    .command("prismadb", "Simulate a Prisma database connection failure.")
+    .action(() => {
+    throw new Error("PrismaClientInitializationError: Can't reach database server at localhost:5432");
+});
 void (0, clix_1.clix)().run();
 //# sourceMappingURL=cli.js.map

@@ -113,6 +113,41 @@ export const ERROR_SIGNATURES: ErrorSignature[] = [
     }),
   },
   {
+    id: "rust-compile-error",
+    category: "RUST_ERROR",
+    confidence: 0.96,
+    match: (error) =>
+      /error\[E\d+\]|^error:/m.test(buildHaystack(error)) && /\.rs:\d+/i.test(buildHaystack(error)),
+    extract: (error) => ({
+      systemCode: error.message.match(/error\[(E\d+)\]/)?.[1] ?? "RUST_COMPILE",
+    }),
+  },
+  {
+    id: "rust-runtime-panic",
+    category: "RUST_ERROR",
+    confidence: 0.95,
+    match: (error) => /thread '.+' panicked at/.test(buildHaystack(error)),
+    extract: () => ({ systemCode: "RUST_PANIC" }),
+  },
+  {
+    id: "java-exception",
+    category: "JAVA_ERROR",
+    confidence: 0.95,
+    match: (error) =>
+      /exception in thread|at com\.|at java\.|at org\.|\.java:\d+/i.test(buildHaystack(error)) ||
+      error.type === "JavaException",
+    extract: (error) => ({
+      systemCode: error.message.match(/(\w+Exception|\w+Error):/)?.[1] ?? "JAVA_EXCEPTION",
+    }),
+  },
+  {
+    id: "java-oom",
+    category: "OUT_OF_MEMORY",
+    confidence: 0.97,
+    match: (error) => /java\.lang\.OutOfMemoryError/i.test(buildHaystack(error)),
+    extract: () => ({ systemCode: "JAVA_OOM" }),
+  },
+  {
     id: "network-request",
     category: "NETWORK_ERROR",
     confidence: 0.91,
@@ -154,6 +189,31 @@ export const ERROR_SIGNATURES: ErrorSignature[] = [
       (error.message.includes("Convex:") || error.message.includes("[Convex]")) &&
       error.message.includes("Could not find public function"),
     extract: () => ({ systemCode: "CONVEX_FUNCTION_NOT_FOUND" }),
+  },
+  {
+    id: "rails-routing-error",
+    category: "RAILS_ERROR",
+    confidence: 0.95,
+    match: (error) => /ActionController::|ActionDispatch::Routing/i.test(buildHaystack(error)),
+    extract: () => ({ systemCode: "RAILS_ROUTING" }),
+  },
+  {
+    id: "rails-activerecord-error",
+    category: "RAILS_ERROR",
+    confidence: 0.95,
+    match: (error) => /ActiveRecord::/i.test(buildHaystack(error)),
+    extract: (error) => ({
+      systemCode: error.message.match(/(ActiveRecord::\w+)/)?.[1] ?? "RAILS_AR",
+    }),
+  },
+  {
+    id: "nextjs-compile-error",
+    category: "NEXTJS_ERROR",
+    confidence: 0.94,
+    match: (error) =>
+      /Failed to compile|Module not found: Error:|Can't resolve/i.test(buildHaystack(error)) &&
+      /next/i.test(buildHaystack(error)),
+    extract: () => ({ systemCode: "NEXT_COMPILE" }),
   },
   // ─── Prisma ───────────────────────────────────────────────────────────────
   {
@@ -285,7 +345,7 @@ export const ERROR_SIGNATURES: ErrorSignature[] = [
 ];
 
 function buildHaystack(error: NormalizedError): string {
-  return `${error.type} ${error.message}`.toLowerCase();
+  return `${error.type} ${error.message} ${error.stack ?? ""}`.toLowerCase();
 }
 
 export function extractStatusCode(message: string): number | null {

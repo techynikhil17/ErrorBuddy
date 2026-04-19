@@ -72,6 +72,25 @@ function buildFixSuggestions(classified, error) {
                 "Add `.catch()` to handle the rejection.",
                 "Or use try/catch with async/await.",
             ];
+        case "RUST_ERROR":
+            if (classified.details.systemCode === "RUST_PANIC") {
+                return [
+                    "Read the panic message and file/line above to find the source.",
+                    "Add `RUST_BACKTRACE=1` before your command for a full stack trace.",
+                    "Use `unwrap_or`, `unwrap_or_else`, or `?` to handle Results gracefully instead of panicking.",
+                ];
+            }
+            return [
+                "Read the compiler error code — Rust error codes have detailed explanations: `rustc --explain E<CODE>`",
+                "Run `cargo check` for a faster feedback loop than a full build.",
+                "Check the borrow checker: ensure references don't outlive their owners.",
+            ];
+        case "JAVA_ERROR":
+            return [
+                "Read the 'Caused by:' line in the stack trace — that is the root cause.",
+                "Wrap the failing call in a try/catch block.",
+                "Add `-XX:+PrintGCDetails` or increase heap with `-Xmx` if the issue is memory-related.",
+            ];
         case "CONVEX_FUNCTION_NOT_FOUND":
             return [
                 "Run `npx convex dev` to start the local Convex development server.",
@@ -158,6 +177,18 @@ function buildFixSuggestions(classified, error) {
                     ? `Stop the process using port ${classified.details.port}: find it with \`lsof -i :${classified.details.port}\` (Mac/Linux) or \`netstat -ano | findstr :${classified.details.port}\` (Windows).`
                     : "Find and stop the conflicting process with `lsof -i` or `netstat -ano`.",
                 "Or configure this service to listen on a different port.",
+            ];
+        case "RAILS_ERROR":
+            return [
+                "Run `rails routes` to see all available routes and their requirements.",
+                "Check the ActiveRecord error message — it usually includes the table name and constraint.",
+                "Run `rails db:migrate` if you recently added a migration.",
+            ];
+        case "NEXTJS_ERROR":
+            return [
+                "Check the import path — Next.js is strict about case sensitivity on Linux.",
+                "Run `npm install` to ensure all dependencies are present.",
+                "Look for `@/` alias misconfigurations in `tsconfig.json` `paths`.",
             ];
         default:
             return [

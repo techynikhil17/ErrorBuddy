@@ -65,7 +65,12 @@ function formatVerboseErrorOutput(explained, normalized, classified, fixes) {
     if (code) {
         lines.push("", chalk_1.default.white("👉 Code"), chalk_1.default.white(code));
     }
-    lines.push("", sectionDivider, chalk_1.default.yellow("💡 What went wrong"), explained.what, "", chalk_1.default.yellow("👉 Why"), explained.why, "", sectionDivider, chalk_1.default.green("🛠 Fix"), ...fixes.map((fix, index) => `${index + 1}. ${fix}`), "", sectionDivider, chalk_1.default.gray("🧭 Signature"), chalk_1.default.gray(`${classified.signatureId} (${Math.round(classified.confidence * 100)}% confidence)`), "", sectionDivider, chalk_1.default.gray("🔎 Raw Error"), chalk_1.default.gray(normalized.message));
+    lines.push("", sectionDivider, chalk_1.default.yellow("💡 What went wrong"), explained.what, "", chalk_1.default.yellow("👉 Why"), explained.why, "", sectionDivider, chalk_1.default.green("🛠 Fix"), ...fixes.map((fix, index) => `${index + 1}. ${fix}`), "", sectionDivider, chalk_1.default.gray("🧭 Signature"), chalk_1.default.gray(`${classified.signatureId} (${Math.round(classified.confidence * 100)}% confidence)`));
+    const runtimeLabel = runtimeFromType(normalized.type);
+    if (runtimeLabel) {
+        lines.push("", sectionDivider, chalk_1.default.gray("🌐 Runtime"), chalk_1.default.gray(runtimeLabel));
+    }
+    lines.push("", sectionDivider, chalk_1.default.gray("🔎 Raw Error"), chalk_1.default.gray(normalized.message));
     return lines.join("\n");
 }
 function formatLocation(normalized) {
@@ -85,5 +90,17 @@ function formatCodeSnippet(normalized) {
     }
     const cleaned = stripLeadIn(snippet);
     return cleaned.includes("👉") ? cleaned : `👉 ${cleaned}`;
+}
+function runtimeFromType(type) {
+    const map = {
+        PythonTraceback: "Python",
+        GoRuntimePanic: "Go",
+        JavaException: "Java / JVM",
+        DockerError: "Docker",
+        PrismaClientKnownRequestError: "Prisma / Node.js",
+        RustError: "Rust",
+        NodeError: "Node.js",
+    };
+    return map[type];
 }
 //# sourceMappingURL=output.js.map

@@ -18,6 +18,9 @@ function detectRuntime(raw) {
     if (/PrismaClientKnownRequestError|PrismaClientInitializationError|\bP\d{4}\b/i.test(raw)) {
         return "prisma";
     }
+    if (/error\[E\d+\]|thread '.+' panicked at|\.rs:\d+/i.test(raw)) {
+        return "rust";
+    }
     return "node";
 }
 // ─── Error-type mapping ───────────────────────────────────────────────────────
@@ -26,6 +29,7 @@ function runtimeToErrorType(runtime) {
         case "python": return "PythonTraceback";
         case "go": return "GoRuntimePanic";
         case "java": return "JavaException";
+        case "rust": return "RustError";
         case "docker": return "DockerError";
         case "prisma": return "PrismaClientKnownRequestError";
         case "node": return "NodeError";

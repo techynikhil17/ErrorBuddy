@@ -134,10 +134,10 @@ export function explainError(
       return {
         title: "Module Not Found",
         what: moduleEntity
-          ? `module '${moduleEntity}' does not exist or could not be resolved.`
+          ? `File '${moduleEntity}' does not exist in the current directory.`
           : "Node.js cannot locate the specified file or dependency.",
         why: moduleEntity
-          ? `module '${moduleEntity}' is not installed or the path is incorrect.`
+          ? `File '${moduleEntity}' does not exist in the current directory.`
           : "The runtime could not resolve the module path or package from the current working directory.",
         ...shared,
       };
@@ -175,6 +175,32 @@ export function explainError(
         why: "The asynchronous failure bubbled up without a surrounding try/catch or `.catch()` handler.",
         ...shared,
       };
+    case "RUST_ERROR": {
+      const isPanic = classified.details.systemCode === "RUST_PANIC";
+      return {
+        title: isPanic ? "Rust Runtime Panic" : "Rust Compilation Error",
+        what: isPanic
+          ? error.message
+          : classified.details.systemCode && classified.details.systemCode !== "RUST_COMPILE"
+            ? `Rust compiler error ${classified.details.systemCode}.`
+            : "The Rust compiler rejected this code.",
+        why: isPanic
+          ? "A thread panicked and was not caught by a panic handler."
+          : "A type error, borrow check failure, or syntax problem prevented compilation.",
+        ...shared,
+      };
+    }
+    case "JAVA_ERROR": {
+      const exceptionType = classified.details.systemCode;
+      return {
+        title: "Java Exception",
+        what: exceptionType && exceptionType !== "JAVA_EXCEPTION"
+          ? `${exceptionType} was thrown.`
+          : "An unhandled Java exception terminated the thread.",
+        why: "An exception propagated up the call stack without being caught.",
+        ...shared,
+      };
+    }
     case "CONVEX_FUNCTION_NOT_FOUND": {
       const keyLine = extractKeyMessage(error.message);
       const convexEntity = keyLine ? extractEntity(keyLine) : extractEntity(error.message);
@@ -303,6 +329,26 @@ export function explainError(
           ? `Another process is already listening on port ${classified.details.port}.`
           : "The requested port is already in use by another process.",
         why: "Two processes cannot bind to the same address + port simultaneously.",
+        ...shared,
+      };
+    case "RAILS_ERROR": {
+      const isAR = classified.details.systemCode?.startsWith("ActiveRecord");
+      return {
+        title: isAR ? "Rails Database Error" : "Rails Routing Error",
+        what: isAR
+          ? `ActiveRecord raised: ${error.message}`
+          : `Rails could not route the request: ${error.message}`,
+        why: isAR
+          ? "A database query failed — the record may be missing, or a constraint was violated."
+          : "No route matches the requested path or HTTP method.",
+        ...shared,
+      };
+    }
+    case "NEXTJS_ERROR":
+      return {
+        title: "Next.js Compilation Failed",
+        what: "Next.js could not compile one or more modules.",
+        why: "A missing import, unresolved path, or syntax error in a page or component caused the build to fail.",
         ...shared,
       };
     default:

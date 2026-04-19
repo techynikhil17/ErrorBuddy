@@ -30,4 +30,20 @@ clix()
     throw new Error("Request failed with status code 500");
   });
 
+clix()
+  .command("pyimport", "Simulate a Python missing-module error.")
+  .action(() => {
+    throw Object.assign(new Error("ModuleNotFoundError: No module named 'requests'"), {
+      name: "PythonTraceback",
+    });
+  });
+
+clix()
+  .command("prismadb", "Simulate a Prisma database connection failure.")
+  .action(() => {
+    throw new Error(
+      "PrismaClientInitializationError: Can't reach database server at localhost:5432",
+    );
+  });
+
 void clix().run();
