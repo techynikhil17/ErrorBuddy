@@ -8,6 +8,7 @@ const classify_1 = require("./engine/classify");
 const explain_1 = require("./engine/explain");
 const suggest_1 = require("./engine/suggest");
 const output_1 = require("./formatter/output");
+const sanitize_1 = require("./utils/sanitize");
 // ─── Constants ────────────────────────────────────────────────────────────────
 /** Milliseconds of stderr silence before flushing a block during long-running process. */
 const DEBOUNCE_MS = 300;
@@ -97,17 +98,20 @@ function splitIntoBlocks(rawStderr) {
     return results;
 }
 // ─── Public API ───────────────────────────────────────────────────────────────
-async function runWrappedCommand(rawCommand) {
+async function runWrappedCommand(commandParts) {
+    validateCommandParts(commandParts);
+    const rawCommand = buildRawCommand(commandParts);
     if (!rawCommand.trim()) {
         throw new Error("No command was provided to run.");
     }
     console.log(`⚙️ Executing: ${rawCommand}`);
     console.log(`📂 Working Dir: ${process.cwd()}`);
     await new Promise((resolve, reject) => {
-        const child = (0, child_process_1.spawn)(rawCommand, {
+        const [command, ...args] = commandParts;
+        const child = (0, child_process_1.spawn)(command, args, {
             cwd: process.cwd(),
             env: process.env,
-            shell: true,
+            shell: false,
             stdio: ["inherit", "pipe", "pipe"],
         });
         let rawStderr = "";
@@ -151,7 +155,7 @@ async function runWrappedCommand(rawCommand) {
         // For long-running processes we ALSO do real-time detection.
         let stderrLineRemainder = "";
         child.stderr.on("data", (chunk) => {
-            const text = chunk.toString();
+            const text = (0, sanitize_1.sanitizeErrorText)(chunk.toString());
             rawStderr += text;
             // Real-time line-by-line detection for long-running servers.
             stderrLineRemainder += text;
@@ -179,7 +183,7 @@ async function runWrappedCommand(rawCommand) {
                     // Note: at exit we'll re-render blocks from rawStderr, so hold normal lines.
                     // Only write if process is clearly still running (stdout was active).
                     if (stdoutActivitySinceLastStderr) {
-                        process.stderr.write(line + "\n");
+                        process.stderr.write((0, sanitize_1.sanitizeTerminalOutput)(line) + "\n");
                     }
                 }
                 stdoutActivitySinceLastStderr = false;
@@ -193,7 +197,7 @@ async function runWrappedCommand(rawCommand) {
             if (code === 0) {
                 // On clean exit, write any unconsumed stderr as-is.
                 if (rawStderr.trim()) {
-                    process.stderr.write(rawStderr);
+                    process.stderr.write((0, sanitize_1.sanitizeTerminalOutput)(rawStderr));
                 }
                 resolve();
                 return;
@@ -211,12 +215,12 @@ async function runWrappedCommand(rawCommand) {
                     // Passthrough lines — only write if non-empty.
                     const clean = segment.raw.trim();
                     if (clean)
-                        process.stderr.write(clean + "\n");
+                        process.stderr.write((0, sanitize_1.sanitizeTerminalOutput)(clean) + "\n");
                 }
             }
             if (!anyPanelRendered && rawStderr.trim()) {
                 // No block was recognised — raw pass-through.
-                process.stderr.write(rawStderr);
+                process.stderr.write((0, sanitize_1.sanitizeTerminalOutput)(rawStderr));
             }
             process.exitCode = 1;
             resolve();
@@ -225,6 +229,16 @@ async function runWrappedCommand(rawCommand) {
 }
 function buildRawCommand(commandParts) {
     return commandParts.map(quoteForShell).join(" ");
+}
+function validateCommandParts(commandParts) {
+    if (commandParts.length === 0 || commandParts.every((part) => !part.trim())) {
+        throw new Error("No command was provided to run.");
+    }
+    for (const part of commandParts) {
+        if (part.includes("\0")) {
+            throw new Error("Command arguments cannot contain null bytes.");
+        }
+    }
 }
 function quoteForShell(value) {
     if (!value)

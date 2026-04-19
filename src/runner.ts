@@ -4,6 +4,7 @@ import { classifyError } from "./engine/classify";
 import { explainError } from "./engine/explain";
 import { buildFixSuggestions } from "./engine/suggest";
 import { formatErrorOutput } from "./formatter/output";
+import { sanitizeErrorText, sanitizeTerminalOutput } from "./utils/sanitize";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -124,7 +125,11 @@ function splitIntoBlocks(rawStderr: string): Array<{ raw: string; isBlock: boole
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
-export async function runWrappedCommand(rawCommand: string): Promise<void> {
+export async function runWrappedCommand(commandParts: string[]): Promise<void> {
+  validateCommandParts(commandParts);
+
+  const rawCommand = buildRawCommand(commandParts);
+
   if (!rawCommand.trim()) {
     throw new Error("No command was provided to run.");
   }
@@ -133,10 +138,11 @@ export async function runWrappedCommand(rawCommand: string): Promise<void> {
   console.log(`📂 Working Dir: ${process.cwd()}`);
 
   await new Promise<void>((resolve, reject) => {
-    const child = spawn(rawCommand, {
+    const [command, ...args] = commandParts;
+    const child = spawn(command, args, {
       cwd: process.cwd(),
       env: process.env,
-      shell: true,
+      shell: false,
       stdio: ["inherit", "pipe", "pipe"],
     });
 
@@ -185,7 +191,7 @@ export async function runWrappedCommand(rawCommand: string): Promise<void> {
     let stderrLineRemainder = "";
 
     child.stderr.on("data", (chunk: Buffer | string) => {
-      const text = chunk.toString();
+      const text = sanitizeErrorText(chunk.toString());
       rawStderr += text;
 
       // Real-time line-by-line detection for long-running servers.
@@ -211,7 +217,7 @@ export async function runWrappedCommand(rawCommand: string): Promise<void> {
           // Note: at exit we'll re-render blocks from rawStderr, so hold normal lines.
           // Only write if process is clearly still running (stdout was active).
           if (stdoutActivitySinceLastStderr) {
-            process.stderr.write(line + "\n");
+            process.stderr.write(sanitizeTerminalOutput(line) + "\n");
           }
         }
         stdoutActivitySinceLastStderr = false;
@@ -228,7 +234,7 @@ export async function runWrappedCommand(rawCommand: string): Promise<void> {
       if (code === 0) {
         // On clean exit, write any unconsumed stderr as-is.
         if (rawStderr.trim()) {
-          process.stderr.write(rawStderr);
+          process.stderr.write(sanitizeTerminalOutput(rawStderr));
         }
         resolve();
         return;
@@ -246,13 +252,13 @@ export async function runWrappedCommand(rawCommand: string): Promise<void> {
         } else {
           // Passthrough lines — only write if non-empty.
           const clean = segment.raw.trim();
-          if (clean) process.stderr.write(clean + "\n");
+          if (clean) process.stderr.write(sanitizeTerminalOutput(clean) + "\n");
         }
       }
 
       if (!anyPanelRendered && rawStderr.trim()) {
         // No block was recognised — raw pass-through.
-        process.stderr.write(rawStderr);
+        process.stderr.write(sanitizeTerminalOutput(rawStderr));
       }
 
       process.exitCode = 1;
@@ -263,6 +269,18 @@ export async function runWrappedCommand(rawCommand: string): Promise<void> {
 
 export function buildRawCommand(commandParts: string[]): string {
   return commandParts.map(quoteForShell).join(" ");
+}
+
+function validateCommandParts(commandParts: string[]): void {
+  if (commandParts.length === 0 || commandParts.every((part) => !part.trim())) {
+    throw new Error("No command was provided to run.");
+  }
+
+  for (const part of commandParts) {
+    if (part.includes("\0")) {
+      throw new Error("Command arguments cannot contain null bytes.");
+    }
+  }
 }
 
 function quoteForShell(value: string): string {

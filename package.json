@@ -1,0 +1,39 @@
+{
+  "name": "errbuddy",
+  "version": "1.0.0",
+  "description": "Your terminal's error best friend",
+  "main": "dist/cli.js",
+  "types": "dist/cli.d.ts",
+  "bin": {
+    "eb": "dist/cli.js"
+  },
+  "files": [
+    "dist/**/*.js",
+    "dist/**/*.d.ts",
+    "README.md",
+    "SECURITY.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "ts-node src/cli.ts"
+  },
+  "keywords": [
+    "cli",
+    "error",
+    "debugging",
+    "developer-tools",
+    "stderr"
+  ],
+  "license": "MIT",
+  "repository": "github.com/yourname/errbuddy",
+  "dependencies": {
+    "chalk": "^5.3.0",
+    "commander": "^12.1.0",
+    "fast-levenshtein": "^3.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.2"
+  }
+}

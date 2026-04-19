@@ -57,7 +57,7 @@ function formatCompactErrorOutput(
     code ? chalk.white(code) : undefined,
     chalk.yellow(`💡 ${explained.why}`),
     chalk.green(`🛠 Fix: ${compactFix}`),
-    chalk.gray("ℹ️ Run with --verbose for full details"),
+    chalk.gray("ℹ️ Run with eb --verbose for full details"),
   ]
     .filter((line): line is string => Boolean(line))
     .join("\n");

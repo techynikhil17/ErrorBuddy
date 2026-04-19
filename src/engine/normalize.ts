@@ -1,5 +1,6 @@
 import { enrichErrorContext, ErrorContext } from "./contextEnricher";
 import { parseStackTrace, StackLocation } from "./stackParser";
+import { sanitizeErrorText } from "../utils/sanitize";
 
 export interface NormalizedError {
   message: string;
@@ -11,40 +12,41 @@ export interface NormalizedError {
 
 export function normalizeError(error: unknown): NormalizedError {
   if (error instanceof Error) {
-    const location = parseStackTrace(error.stack);
+    const message = readErrorString(error, "message") ?? "An unknown error occurred.";
+    const stack = readErrorString(error, "stack");
+    const type = readErrorString(error, "name") ?? "Error";
+    const location = parseStackTrace(stack);
     return {
-      message: error.message || "An unknown error occurred.",
-      stack: error.stack,
-      type: error.name || "Error",
+      message,
+      stack,
+      type,
       location,
-      context: enrichErrorContext(error.message, location),
+      context: enrichErrorContext(message, location),
     };
   }
 
   if (typeof error === "string") {
-    const location = parseStackTrace(error);
+    const sanitized = sanitizeErrorText(error);
+    const location = parseStackTrace(sanitized);
     return {
-      message: error,
-      stack: error,
+      message: sanitized,
+      stack: sanitized,
       type: "StringError",
       location,
-      context: enrichErrorContext(error, location),
+      context: enrichErrorContext(sanitized, location),
     };
   }
 
   if (typeof error === "object" && error !== null) {
-    const candidate = error as { message?: unknown; stack?: unknown; name?: unknown };
-    const message =
-      typeof candidate.message === "string"
-        ? candidate.message
-        : "A non-standard error object was thrown.";
-    const stack = typeof candidate.stack === "string" ? candidate.stack : undefined;
+    const candidate = error as Record<string, unknown>;
+    const message = readOwnString(candidate, "message") ?? "A non-standard error object was thrown.";
+    const stack = readOwnString(candidate, "stack");
     const location = parseStackTrace(stack);
 
     return {
       message,
       stack,
-      type: typeof candidate.name === "string" ? candidate.name : "UnknownObjectError",
+      type: readOwnString(candidate, "name") ?? "UnknownObjectError",
       location,
       context: enrichErrorContext(message, location),
     };
@@ -55,4 +57,27 @@ export function normalizeError(error: unknown): NormalizedError {
     type: typeof error,
     context: {},
   };
+}
+
+function readErrorString(target: Error, key: "message" | "stack" | "name"): string | undefined {
+  try {
+    const value = Reflect.get(target, key);
+    return typeof value === "string" ? sanitizeErrorText(value) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function readOwnString(target: Record<string, unknown>, key: "message" | "stack" | "name"): string | undefined {
+  if (!Object.prototype.hasOwnProperty.call(target, key)) {
+    return undefined;
+  }
+
+  const descriptor = Object.getOwnPropertyDescriptor(target, key);
+
+  if (!descriptor || typeof descriptor.get === "function") {
+    return undefined;
+  }
+
+  return typeof descriptor.value === "string" ? sanitizeErrorText(descriptor.value) : undefined;
 }

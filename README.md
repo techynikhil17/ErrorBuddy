@@ -5,6 +5,7 @@ Your terminal's error best friend
 
 ```bash
 npm install -g errbuddy
+eb init            # optional: enables automatic interception
 ```
 
 ## Before/After
@@ -32,17 +33,22 @@ after
 📍 src/server.ts:42
 💡 Nothing is accepting connections on port 5432 right now.
 🛠 Fix: Start the service listening on port 5432.
-ℹ️  Run with --verbose for full details
+ℹ️  Run with eb --verbose for full details
 ```
 
 ## Usage
 
 ```bash
-errbuddy run npm run dev
-errbuddy run python manage.py runserver
-errbuddy run go run .
-errbuddy run cargo run
-errbuddy run node server.js
+# Option A — one-time setup (recommended)
+eb init
+npm run dev        # just works, no prefix needed
+
+# Option B — explicit mode (no setup required)
+eb run npm run dev
+eb run python manage.py runserver
+eb run go run .
+eb run cargo run
+eb run node server.js
 ```
 
 ## Supported runtimes
@@ -71,7 +77,7 @@ Errbuddy wraps your command and intercepts stderr in real time. It detects the r
 Use `--verbose` or `-v` to show the raw error, signature ID, confidence score, and detected runtime.
 
 ```bash
-errbuddy --verbose run npm run dev
+eb --verbose run npm run dev
 ```
 
 ## Contributing

@@ -4,16 +4,19 @@ import { explainError } from "../engine/explain";
 import { normalizeError } from "../engine/normalize";
 import { buildFixSuggestions, buildSuggestionText } from "../engine/suggest";
 import { formatErrorOutput, formatSuggestionOutput } from "../formatter/output";
-import { buildRawCommand, runWrappedCommand } from "../runner";
+import { runWrappedCommand } from "../runner";
 import { buildInvalidCommandResult, resolveInputCommandName } from "./parser";
 
 type CommandAction = (...args: unknown[]) => unknown | Promise<unknown>;
+type CommandRegistrationOptions = {
+  hidden?: boolean;
+};
 
 export class ClixApp {
   private readonly program: Command;
   private readonly commandNames = new Set<string>();
 
-  constructor(name = "clix") {
+  constructor(name = "eb") {
     this.program = new Command();
     this.program
       .name(name)
@@ -25,14 +28,13 @@ export class ClixApp {
 
     this.program
       .command("run")
-      .description("Run an external command through clix error handling.")
+      .description("Run an external command through eb error handling.")
       .allowUnknownOption(true)
       .passThroughOptions()
       .argument("<command...>", "command to execute")
       .action(async (commandParts: string[]) => {
         try {
-          const rawCommand = buildRawCommand(commandParts);
-          await runWrappedCommand(rawCommand);
+          await runWrappedCommand(commandParts);
         } catch (error) {
           renderClixError(error);
           process.exitCode = 1;
@@ -42,13 +44,17 @@ export class ClixApp {
     this.commandNames.add("run");
   }
 
-  command(name: string, description?: string): Command {
+  command(name: string, descriptionOrOptions?: string | CommandRegistrationOptions): Command {
     this.commandNames.add(name);
 
-    const registered = this.program.command(name);
+    const options =
+      descriptionOrOptions && typeof descriptionOrOptions === "object"
+        ? descriptionOrOptions
+        : undefined;
+    const registered = options ? this.program.command(name, options) : this.program.command(name);
 
-    if (description) {
-      registered.description(description);
+    if (typeof descriptionOrOptions === "string") {
+      registered.description(descriptionOrOptions);
     }
 
     const originalAction = registered.action.bind(registered);

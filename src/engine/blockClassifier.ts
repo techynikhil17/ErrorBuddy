@@ -1,4 +1,5 @@
 import type { NormalizedError } from "./normalize";
+import { sanitizeErrorText } from "../utils/sanitize";
 
 /** Runtimes we can detect from raw stderr text. */
 type DetectedRuntime =
@@ -128,18 +129,19 @@ function extractStatusCodeFromText(text: string): number | undefined {
  * can handle without modification.
  */
 export function classifyRawBlock(rawText: string, _exitCode?: number): NormalizedError {
-  const lines = rawText.split(/\r?\n/).filter((l) => l.trim());
-  const runtime = detectRuntime(rawText);
+  const safeRawText = sanitizeErrorText(rawText);
+  const lines = safeRawText.split(/\r?\n/).filter((l) => l.trim());
+  const runtime = detectRuntime(safeRawText);
   const signalLine = extractSignalLine(lines, runtime);
 
   return {
     message: signalLine,
-    stack: rawText,
+    stack: safeRawText,
     type: runtimeToErrorType(runtime),
     context: {
-      moduleName: extractModuleFromText(rawText),
-      port: extractPortFromText(rawText),
-      statusCode: extractStatusCodeFromText(rawText),
+      moduleName: extractModuleFromText(safeRawText),
+      port: extractPortFromText(safeRawText),
+      statusCode: extractStatusCodeFromText(safeRawText),
     },
   };
 }

@@ -1,2 +1,10 @@
 node_modules/
-package.json
+.env
+.env.*
+!.env.example
+dist/
+*.key
+*.pem
+.npm-cach/
+.npm-cache/
+.test-home/

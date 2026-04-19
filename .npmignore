@@ -1,0 +1,8 @@
+src/
+node_modules/
+.npm-cache/
+dist/**/*.map
+.env
+.env.*
+*.key
+*.pem

@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.classifyRawBlock = classifyRawBlock;
+const sanitize_1 = require("../utils/sanitize");
 // ─── Runtime detection ────────────────────────────────────────────────────────
 function detectRuntime(raw) {
     if (/Traceback \(most recent call last\):|File ".+?\.py", line/i.test(raw)) {
@@ -106,17 +107,18 @@ function extractStatusCodeFromText(text) {
  * can handle without modification.
  */
 function classifyRawBlock(rawText, _exitCode) {
-    const lines = rawText.split(/\r?\n/).filter((l) => l.trim());
-    const runtime = detectRuntime(rawText);
+    const safeRawText = (0, sanitize_1.sanitizeErrorText)(rawText);
+    const lines = safeRawText.split(/\r?\n/).filter((l) => l.trim());
+    const runtime = detectRuntime(safeRawText);
     const signalLine = extractSignalLine(lines, runtime);
     return {
         message: signalLine,
-        stack: rawText,
+        stack: safeRawText,
         type: runtimeToErrorType(runtime),
         context: {
-            moduleName: extractModuleFromText(rawText),
-            port: extractPortFromText(rawText),
-            statusCode: extractStatusCodeFromText(rawText),
+            moduleName: extractModuleFromText(safeRawText),
+            port: extractPortFromText(safeRawText),
+            statusCode: extractStatusCodeFromText(safeRawText),
         },
     };
 }

@@ -13,7 +13,7 @@ const output_1 = require("../formatter/output");
 const runner_1 = require("../runner");
 const parser_1 = require("./parser");
 class ClixApp {
-    constructor(name = "clix") {
+    constructor(name = "eb") {
         this.commandNames = new Set();
         this.program = new commander_1.Command();
         this.program
@@ -25,14 +25,13 @@ class ClixApp {
             .allowUnknownOption(false);
         this.program
             .command("run")
-            .description("Run an external command through clix error handling.")
+            .description("Run an external command through eb error handling.")
             .allowUnknownOption(true)
             .passThroughOptions()
             .argument("<command...>", "command to execute")
             .action(async (commandParts) => {
             try {
-                const rawCommand = (0, runner_1.buildRawCommand)(commandParts);
-                await (0, runner_1.runWrappedCommand)(rawCommand);
+                await (0, runner_1.runWrappedCommand)(commandParts);
             }
             catch (error) {
                 renderClixError(error);
@@ -41,11 +40,14 @@ class ClixApp {
         });
         this.commandNames.add("run");
     }
-    command(name, description) {
+    command(name, descriptionOrOptions) {
         this.commandNames.add(name);
-        const registered = this.program.command(name);
-        if (description) {
-            registered.description(description);
+        const options = descriptionOrOptions && typeof descriptionOrOptions === "object"
+            ? descriptionOrOptions
+            : undefined;
+        const registered = options ? this.program.command(name, options) : this.program.command(name);
+        if (typeof descriptionOrOptions === "string") {
+            registered.description(descriptionOrOptions);
         }
         const originalAction = registered.action.bind(registered);
         registered.action = (handler) => {
