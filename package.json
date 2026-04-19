@@ -24,8 +24,9 @@
     "developer-tools",
     "stderr"
   ],
+  "author": "M Nikhil",
   "license": "MIT",
-  "repository": "github.com/yourname/errbuddy",
+  "repository": "github.com/techynikhil17/errbuddy",
   "dependencies": {
     "chalk": "^5.3.0",
     "commander": "^12.1.0",
