@@ -1,89 +1,172 @@
-# errbuddy
-Your terminal's error best friend
+<div align="center">
+<img src="assets/banner.png" alt="errbuddy — your terminal's error best friend" width="100%">
+<h1>errbuddy</h1>
+
+<p>Your terminal's error best friend.<br/>
+Stop reading stack traces. Start reading answers.</p>
+
+<p>
+  <a href="https://www.npmjs.com/package/errbuddy">
+    <img src="https://img.shields.io/npm/v/errbuddy?color=crimson&label=npm&style=flat-square" alt="npm version">
+  </a>
+  <a href="https://www.npmjs.com/package/errbuddy">
+    <img src="https://img.shields.io/npm/dm/errbuddy?style=flat-square&color=orange" alt="downloads">
+  </a>
+  <img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="license">
+  <img src="https://img.shields.io/badge/node-%3E%3D18-brightgreen?style=flat-square" alt="node">
+</p>
+
+</div>
+
+<table>
+<tr>
+<th>without errbuddy</th>
+<th>with errbuddy</th>
+</tr>
+<tr>
+<td>
+
+```text
+Error: connect ECONNREFUSED 127.0.0.1:5432
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:494:16) {
+  errno: -61,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 5432
+}
+    at Object.<anonymous> (/Users/dev/project/src/db.ts:12:3)
+    at Module._compile (node:internal/modules/cjs/loader:1364:14)
+    at Object..js (node:internal/modules/cjs/loader:1422:10)
+    at Module.load (node:internal/modules/cjs/loader:1203:32)
+    at Function._load (node:internal/modules/cjs/loader:1019:12)
+```
+
+</td>
+<td>
+
+```text
+❌ Connection Refused
+
+📍 src/db.ts:12
+
+💡 Nothing is accepting connections on port 5432 right now.
+
+🛠 Fix: Start the service listening on port 5432.
+   Confirm the connection string matches the running service.
+
+ℹ️  Run with eb --verbose for full details
+```
+
+</td>
+</tr>
+</table>
 
 ## Installation
 
 ```bash
 npm install -g errbuddy
-eb init            # optional: enables automatic interception
 ```
 
-## Before/After
+**Option A — Automatic (recommended)**
 
-before
-
-```text
-Error: connect ECONNREFUSED 127.0.0.1:5432
-    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1555:16)
-    at connect (node:net:1498:10)
-    at Socket.connect (node:net:1390:5)
-    at Object.<anonymous> (src/server.ts:42:13)
-    at Module._compile (node:internal/modules/cjs/loader:1256:14)
-    at Object.Module._extensions..js (node:internal/modules/cjs/loader:1310:10)
-    at Module.load (node:internal/modules/cjs/loader:1119:32)
-    at Function.Module._load (node:internal/modules/cjs/loader:960:12)
-    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:81:12)
-    at node:internal/main/run_main_module:23:47
+```bash
+eb init
 ```
 
-after
+Installs a shell hook — every command you run gets errbuddy interception automatically. No prefix needed ever again.
 
-```text
-❌ Connection Refused
-📍 src/server.ts:42
-💡 Nothing is accepting connections on port 5432 right now.
-🛠 Fix: Start the service listening on port 5432.
-ℹ️  Run with eb --verbose for full details
+**Option B — Explicit**
+
+```bash
+eb run <your command>
 ```
+
+No setup required. Prefix any command to run it through errbuddy.
 
 ## Usage
 
 ```bash
-# Option A — one-time setup (recommended)
-eb init
-npm run dev        # just works, no prefix needed
+# after eb init — no changes to how you work
+npm run dev
+python manage.py runserver
+go run .
+cargo run
 
-# Option B — explicit mode (no setup required)
+# explicit mode — works anywhere, no setup
 eb run npm run dev
 eb run python manage.py runserver
 eb run go run .
 eb run cargo run
-eb run node server.js
+
+# full diagnostic output
+eb run npm run dev --verbose
 ```
 
-## Supported runtimes
+## What errbuddy understands
 
-- Node.js
-- TypeScript
-- Python
-- Go
-- Rust
-- Java / JVM
-- Docker
-- Prisma
-- Next.js
-- Rails
-- PostgreSQL
-- Generic HTTP errors
-- Out-of-memory failures
-- Disk full errors
+| Runtime | What it catches |
+|---|---|
+| Node.js / TypeScript | TypeError, ECONNREFUSED, module not found, unhandled rejections, heap OOM |
+| Python | Tracebacks, ModuleNotFoundError, import errors |
+| Go | Runtime panics, goroutine dumps, build errors |
+| Rust | Compiler errors (E-codes), thread panics |
+| Java / JVM | Uncaught exceptions, stack traces |
+| Docker | Daemon errors, missing images |
+| Prisma | P-codes, init failures, constraint violations |
+| Next.js | Compilation failures, unresolved modules |
+| Rails | ActiveRecord errors, routing errors |
+| PostgreSQL | Auth failures, role errors, connection refused |
+| Generic | HTTP 4xx/5xx, disk full (ENOSPC), port conflicts |
 
 ## How it works
 
-Errbuddy wraps your command and intercepts stderr in real time. It detects the runtime, matches the error against known signatures, and extracts useful context like ports, files, modules, and JSON positions. Then it turns that into a short human explanation plus concrete fixes. If the error is unknown, it still shows a structured panel instead of guessing.
+errbuddy spawns your command as a child process and pipes stdout through untouched in real time.
+It watches stderr for known error block patterns across 11 runtimes using a real-time debounced buffer.
+When a match is found, it runs the raw text through a classify → explain → suggest pipeline and replaces the noise with a clean panel.
+Unrecognised output passes through as-is — errbuddy stays silent unless it has something useful to say.
 
 ## Verbose mode
 
-Use `--verbose` or `-v` to show the raw error, signature ID, confidence score, and detected runtime.
+Verbose mode keeps the same panel, then adds the signature, confidence, runtime, and raw error details underneath.
 
-```bash
-eb --verbose run npm run dev
+```text
+══════════════════════
+❌ Connection Refused
+══════════════════════
+
+📍 Location
+src/db.ts:12
+
+──────────────
+💡 What went wrong
+The target service actively refused the connection attempt.
+
+👉 Why
+Nothing is accepting connections on port 5432 right now.
+
+──────────────
+🛠 Fix
+1. Start the service listening on port 5432.
+2. Confirm the connection string matches the service that should be running.
+
+──────────────
+🧭 Signature
+connection-refused (97% confidence)
+
+──────────────
+🌐 Runtime
+Node.js
+
+──────────────
+🔎 Raw Error
+connect ECONNREFUSED 127.0.0.1:5432
 ```
 
 ## Contributing
 
-Found a bad classification or want support for another runtime? Open an issue.
+Open an issue with the raw stderr text whenever errbuddy misses or misclassifies something. The tool is still early, and every good report turns into a better signature in the next release.
 
 ## License
 
-MIT
+MIT © errbuddy contributors
