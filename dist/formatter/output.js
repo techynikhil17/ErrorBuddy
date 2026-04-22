@@ -18,8 +18,8 @@ function isVerboseMode(errorType) {
     const envValue = process.env.CLIX_VERBOSE?.toLowerCase();
     return envValue === "1" || envValue === "true" || envValue === "yes";
 }
-function formatErrorOutput(explained, normalized, classified, fixes) {
-    return isVerboseMode(explained.category)
+function formatErrorOutput(explained, normalized, classified, fixes, verbose = false) {
+    return verbose || isVerboseMode(explained.category)
         ? formatVerboseErrorOutput(explained, normalized, classified, fixes)
         : formatCompactErrorOutput(explained, normalized, fixes);
 }

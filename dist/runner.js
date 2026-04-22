@@ -25,7 +25,7 @@ const DEDUP_NOTICE_THRESHOLD = 3;
  */
 const BLOCK_START_RE = /^\s*(TypeError|SyntaxError|ReferenceError|RangeError|URIError|EvalError|Error:|FATAL|FATAL ERROR|Exception in thread|Traceback \(most recent call last\)|panic:|goroutine \d+ \[|thread '.+' panicked at|error\[E\d+\]|Error response from daemon|PrismaClientKnownRequestError|PrismaClientInitializationError|error TS\d+|UnhandledPromiseRejection|ECONNREFUSED|ENOENT|EADDRINUSE|EACCES|ENOMEM|ENOSPC|ModuleNotFoundError|ImportError|NullPointerException|OutOfMemoryError|ActionController::|ActiveRecord::|Error: Failed to compile|\[ Error \])/i;
 // ─── Renderer ─────────────────────────────────────────────────────────────────
-function renderBlock(raw, dedupMap) {
+function renderBlock(raw, dedupMap, verbose = false) {
     const normalized = (0, blockClassifier_1.classifyRawBlock)(raw);
     const classified = (0, classify_1.classifyError)(normalized);
     // Only produce a clix panel for recognised errors (confidence > 0.5).
@@ -48,7 +48,7 @@ function renderBlock(raw, dedupMap) {
     dedupMap.set(key, { count: 1, lastSeen: now });
     const explained = (0, explain_1.explainError)(normalized, classified);
     const fixes = (0, suggest_1.buildFixSuggestions)(classified, normalized);
-    const output = (0, output_1.formatErrorOutput)(explained, normalized, classified, fixes);
+    const output = (0, output_1.formatErrorOutput)(explained, normalized, classified, fixes, verbose);
     process.stderr.write(output.endsWith("\n") ? output + "\n" : output + "\n\n");
     return true;
 }
@@ -98,7 +98,7 @@ function splitIntoBlocks(rawStderr) {
     return results;
 }
 // ─── Public API ───────────────────────────────────────────────────────────────
-async function runWrappedCommand(commandParts) {
+async function runWrappedCommand(commandParts, verbose = false) {
     validateCommandParts(commandParts);
     const rawCommand = buildRawCommand(commandParts);
     if (!rawCommand.trim()) {
@@ -111,11 +111,10 @@ async function runWrappedCommand(commandParts) {
         const child = (0, child_process_1.spawn)(command, args, {
             cwd: process.cwd(),
             env: process.env,
-            shell: false,
+            shell: process.platform === "win32",
             stdio: ["inherit", "pipe", "pipe"],
         });
         let rawStderr = "";
-        let stdoutActivitySinceLastStderr = false;
         const dedupMap = new Map();
         // ── Real-time debounce state (for long-running processes) ──
         let liveBuffer = [];
@@ -134,7 +133,7 @@ async function runWrappedCommand(commandParts) {
             clearDebounce();
             const block = liveBuffer.join("\n");
             liveBuffer = [];
-            if (renderBlock(block, dedupMap)) {
+            if (renderBlock(block, dedupMap, verbose)) {
                 livePanelRendered = true;
             }
         }
@@ -147,7 +146,6 @@ async function runWrappedCommand(commandParts) {
         // ── Stdout: always real-time ──
         child.stdout.pipe(process.stdout);
         child.stdout.on("data", () => {
-            stdoutActivitySinceLastStderr = true;
             if (liveBuffer.length > 0)
                 flushLiveBuffer();
         });
@@ -180,13 +178,8 @@ async function runWrappedCommand(commandParts) {
                 }
                 else {
                     // Passthrough (not in a block) — write immediately.
-                    // Note: at exit we'll re-render blocks from rawStderr, so hold normal lines.
-                    // Only write if process is clearly still running (stdout was active).
-                    if (stdoutActivitySinceLastStderr) {
-                        process.stderr.write((0, sanitize_1.sanitizeTerminalOutput)(line) + "\n");
-                    }
+                    process.stderr.write((0, sanitize_1.sanitizeTerminalOutput)(line) + "\n");
                 }
-                stdoutActivitySinceLastStderr = false;
             }
         });
         child.on("error", reject);
@@ -207,7 +200,7 @@ async function runWrappedCommand(commandParts) {
             let anyPanelRendered = false;
             for (const segment of blocks) {
                 if (segment.isBlock) {
-                    if (renderBlock(segment.raw, dedupMap)) {
+                    if (renderBlock(segment.raw, dedupMap, verbose)) {
                         anyPanelRendered = true;
                     }
                 }

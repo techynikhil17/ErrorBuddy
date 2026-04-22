@@ -23,8 +23,9 @@ export function formatErrorOutput(
   normalized: NormalizedError,
   classified: ClassifiedError,
   fixes: string[],
+  verbose = false,
 ): string {
-  return isVerboseMode(explained.category)
+  return verbose || isVerboseMode(explained.category)
     ? formatVerboseErrorOutput(explained, normalized, classified, fixes)
     : formatCompactErrorOutput(explained, normalized, fixes);
 }

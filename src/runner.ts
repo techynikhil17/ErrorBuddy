@@ -38,7 +38,7 @@ interface DedupEntry {
 
 // ─── Renderer ─────────────────────────────────────────────────────────────────
 
-function renderBlock(raw: string, dedupMap: Map<string, DedupEntry>): boolean {
+function renderBlock(raw: string, dedupMap: Map<string, DedupEntry>, verbose = false): boolean {
   const normalized = classifyRawBlock(raw);
   const classified = classifyError(normalized);
 
@@ -68,7 +68,7 @@ function renderBlock(raw: string, dedupMap: Map<string, DedupEntry>): boolean {
 
   const explained = explainError(normalized, classified);
   const fixes = buildFixSuggestions(classified, normalized);
-  const output = formatErrorOutput(explained, normalized, classified, fixes);
+  const output = formatErrorOutput(explained, normalized, classified, fixes, verbose);
   process.stderr.write(output.endsWith("\n") ? output + "\n" : output + "\n\n");
   return true;
 }
@@ -125,7 +125,7 @@ function splitIntoBlocks(rawStderr: string): Array<{ raw: string; isBlock: boole
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
-export async function runWrappedCommand(commandParts: string[]): Promise<void> {
+export async function runWrappedCommand(commandParts: string[], verbose = false): Promise<void> {
   validateCommandParts(commandParts);
 
   const rawCommand = buildRawCommand(commandParts);
@@ -142,12 +142,11 @@ export async function runWrappedCommand(commandParts: string[]): Promise<void> {
     const child = spawn(command, args, {
       cwd: process.cwd(),
       env: process.env,
-      shell: false,
+      shell: process.platform === "win32",
       stdio: ["inherit", "pipe", "pipe"],
     });
 
     let rawStderr = "";
-    let stdoutActivitySinceLastStderr = false;
     const dedupMap = new Map<string, DedupEntry>();
 
     // ── Real-time debounce state (for long-running processes) ──
@@ -168,7 +167,7 @@ export async function runWrappedCommand(commandParts: string[]): Promise<void> {
       clearDebounce();
       const block = liveBuffer.join("\n");
       liveBuffer = [];
-      if (renderBlock(block, dedupMap)) {
+      if (renderBlock(block, dedupMap, verbose)) {
         livePanelRendered = true;
       }
     }
@@ -182,7 +181,6 @@ export async function runWrappedCommand(commandParts: string[]): Promise<void> {
     // ── Stdout: always real-time ──
     child.stdout.pipe(process.stdout);
     child.stdout.on("data", () => {
-      stdoutActivitySinceLastStderr = true;
       if (liveBuffer.length > 0) flushLiveBuffer();
     });
 
@@ -214,13 +212,8 @@ export async function runWrappedCommand(commandParts: string[]): Promise<void> {
           }
         } else {
           // Passthrough (not in a block) — write immediately.
-          // Note: at exit we'll re-render blocks from rawStderr, so hold normal lines.
-          // Only write if process is clearly still running (stdout was active).
-          if (stdoutActivitySinceLastStderr) {
-            process.stderr.write(sanitizeTerminalOutput(line) + "\n");
-          }
+          process.stderr.write(sanitizeTerminalOutput(line) + "\n");
         }
-        stdoutActivitySinceLastStderr = false;
       }
     });
 
@@ -246,7 +239,7 @@ export async function runWrappedCommand(commandParts: string[]): Promise<void> {
 
       for (const segment of blocks) {
         if (segment.isBlock) {
-          if (renderBlock(segment.raw, dedupMap)) {
+          if (renderBlock(segment.raw, dedupMap, verbose)) {
             anyPanelRendered = true;
           }
         } else {

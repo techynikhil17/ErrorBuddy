@@ -31,10 +31,11 @@ export class ClixApp {
       .description("Run an external command through eb error handling.")
       .allowUnknownOption(true)
       .passThroughOptions()
+      .option("-v, --verbose", "show full diagnostic output")
       .argument("<command...>", "command to execute")
-      .action(async (commandParts: string[]) => {
+      .action(async (commandParts: string[], options: { verbose?: boolean }) => {
         try {
-          await runWrappedCommand(commandParts);
+          await runWrappedCommand(commandParts, options.verbose ?? false);
         } catch (error) {
           renderClixError(error);
           process.exitCode = 1;
