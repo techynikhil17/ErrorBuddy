@@ -100,7 +100,7 @@ eb run go run .
 eb run cargo run
 
 # full diagnostic output
-eb run npm run dev --verbose
+eb run -v npm run dev
 ```
 
 ## What errbuddy understands
@@ -122,9 +122,19 @@ eb run npm run dev --verbose
 ## How it works
 
 errbuddy spawns your command as a child process and pipes stdout through untouched in real time.
-It watches stderr for known error block patterns across 11 runtimes using a real-time debounced buffer.
-When a match is found, it runs the raw text through a classify → explain → suggest pipeline and replaces the noise with a clean panel.
-Unrecognised output passes through as-is — errbuddy stays silent unless it has something useful to say.
+It watches stderr with a **two-tier hybrid detector**:
+
+| Tier | Regex | Output |
+|---|---|---|
+| **Known** | Anchored patterns for 11 runtimes | Full panel — title, why, fix suggestions |
+| **Heuristic** | Broad keyword net (`error`, `failed`, `exception`, `internal server error`, …) | Minimal panel — reformatted, no fake explanation |
+| **Passthrough** | Everything else | Written to stderr as-is, untouched |
+
+When a known error is detected, it runs the raw text through a classify → explain → suggest pipeline and replaces the noise with a clean panel.
+When an unknown error is detected, it shows a minimal panel with no invented explanation.
+Unrecognised output passes through untouched — errbuddy stays silent unless it has something useful to say.
+
+Duplicate errors within a 10-second window are suppressed and counted, so long-running servers don't flood the terminal with the same panel.
 
 ## Verbose mode
 
@@ -162,6 +172,39 @@ Node.js
 🔎 Raw Error
 connect ECONNREFUSED 127.0.0.1:5432
 ```
+
+Activate with `eb run -v <command>` or set `CLIX_VERBOSE=1`.
+
+## Unknown error detection
+
+For errors that don't match any known signature (Django `OperationalError`, Express middleware failures, custom exceptions, etc.), errbuddy shows a minimal panel instead of letting raw lines scroll by:
+
+```text
+⚠️  Internal Server Error: /api/users/
+OperationalError: no such table: users
+ℹ️  Unrecognised error — showing raw output
+```
+
+No invented `💡 Why` or `🛠 Fix` — those only appear when errbuddy actually understands the error.
+The server keeps running. Exit codes are not affected for non-fatal errors.
+
+If the same unknown error repeats within 10 seconds, dedup kicks in:
+
+```text
+⚠️  Same error repeated ×3 — suppressing duplicates
+```
+
+## Changelog
+
+### v1.1.0
+- **Hybrid detection** — a broad heuristic net now catches unknown errors (e.g. `Internal Server Error`, `OperationalError`) and renders a minimal panel instead of raw output
+- **Adaptive flush** — heuristic error blocks flush after a single line + blank, so short 2-line framework errors are caught immediately
+- **Dedup for unknown errors** — same heuristic panel suppressed and counted within a 10-second window
+
+### v1.0.1
+- **Windows fix** — `spawn` now uses `shell: true` on Windows so `npm`, `yarn`, and `pnpm` resolve correctly (`ENOENT` on `.cmd` scripts is gone)
+- **`-v` flag fix** — verbose flag is now scoped to the `run` subcommand; previously `-v` was passed as the command to spawn, causing `ENOENT`
+- **Server log streaming** — passthrough stderr lines (Django, Next.js, Rails access logs) are no longer gated on stdout activity; they stream immediately
 
 ## Contributing
 
