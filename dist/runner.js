@@ -20,16 +20,40 @@ const DEDUP_WINDOW_MS = 10000;
 const DEDUP_NOTICE_THRESHOLD = 3;
 // ─── Block-start heuristics ───────────────────────────────────────────────────
 /**
- * Matches lines that signal the start of a new error block.
- * Anchored patterns prevent false positives from embedded codes or throw statements.
+ * HIGH CONFIDENCE: known error block starters — existing patterns.
+ * These get full classify → explain → suggest pipeline.
  */
-const BLOCK_START_RE = /^\s*(TypeError|SyntaxError|ReferenceError|RangeError|URIError|EvalError|Error:|FATAL|FATAL ERROR|Exception in thread|Traceback \(most recent call last\)|panic:|goroutine \d+ \[|thread '.+' panicked at|error\[E\d+\]|Error response from daemon|PrismaClientKnownRequestError|PrismaClientInitializationError|error TS\d+|UnhandledPromiseRejection|ECONNREFUSED|ENOENT|EADDRINUSE|EACCES|ENOMEM|ENOSPC|ModuleNotFoundError|ImportError|NullPointerException|OutOfMemoryError|ActionController::|ActiveRecord::|Error: Failed to compile|\[ Error \])/i;
+const KNOWN_ERROR_RE = /^\s*(TypeError|SyntaxError|ReferenceError|RangeError|URIError|EvalError|Error:|FATAL|FATAL ERROR|Exception in thread|Traceback \(most recent call last\)|panic:|goroutine \d+ \[|thread '.+' panicked at|error\[E\d+\]|Error response from daemon|PrismaClientKnownRequestError|PrismaClientInitializationError|error TS\d+|UnhandledPromiseRejection|ECONNREFUSED|ENOENT|EADDRINUSE|EACCES|ENOMEM|ENOSPC|ModuleNotFoundError|ImportError|NullPointerException|OutOfMemoryError|ActionController::|ActiveRecord::|Error: Failed to compile|\[ Error \])/i;
+/**
+ * BROAD HEURISTIC: catches anything that looks like an error but isn't in known signatures.
+ * Used to trigger a clean minimal panel for unknown errors.
+ */
+const HEURISTIC_ERROR_RE = /\b(error|exception|failed|failure|fatal|panic|crash|traceback|warning|denied|refused|not found|undefined|null pointer|segfault|killed|timeout|unreachable|bad gateway|internal server error|operationalerror|integrityerror|validationerror|sequelizevalidationerror|mongoservererror|unhandled|rejected|aborted|stack overflow|out of memory|cannot|could not|unable to)\b/i;
 // ─── Renderer ─────────────────────────────────────────────────────────────────
-function renderBlock(raw, dedupMap, verbose = false) {
+function renderBlock(raw, dedupMap, verbose = false, isHeuristic = false) {
     const normalized = (0, blockClassifier_1.classifyRawBlock)(raw);
     const classified = (0, classify_1.classifyError)(normalized);
-    // Only produce a clix panel for recognised errors (confidence > 0.5).
+    // ── Heuristic path: unknown error — minimal panel, no fake explanation ──
+    if (isHeuristic && classified.confidence <= 0.5) {
+        const key = `heuristic:${raw.slice(0, 120)}`;
+        const now = Date.now();
+        const prev = dedupMap.get(key);
+        if (prev && now - prev.lastSeen < DEDUP_WINDOW_MS) {
+            prev.count++;
+            prev.lastSeen = now;
+            if (prev.count >= DEDUP_NOTICE_THRESHOLD) {
+                process.stderr.write(`⚠️  Same error repeated ×${prev.count} — suppressing duplicates\n`);
+            }
+            return true;
+        }
+        dedupMap.set(key, { count: 1, lastSeen: now });
+        const output = (0, output_1.formatUnknownErrorOutput)(raw);
+        process.stderr.write(output.endsWith("\n") ? output + "\n" : output + "\n\n");
+        return true;
+    }
+    // ── Known error path — full classify → explain → suggest pipeline ──
     if (classified.confidence <= 0.5) {
+        // Neither known nor heuristic confidence — raw passthrough.
         process.stderr.write(raw.endsWith("\n") ? raw : raw + "\n");
         return false;
     }
@@ -55,31 +79,42 @@ function renderBlock(raw, dedupMap, verbose = false) {
 // ─── Block splitter ───────────────────────────────────────────────────────────
 /**
  * Splits a full stderr string into a list of error blocks + passthrough lines.
- * Returns an array of { raw: string, isBlock: boolean }.
+ * Returns an array of { raw: string, isBlock: boolean, isHeuristic: boolean }.
  */
 function splitIntoBlocks(rawStderr) {
     const lines = rawStderr.split(/\r?\n/);
     const results = [];
     let currentBlock = [];
     let inBlock = false;
+    let currentIsHeuristic = false;
     function flushCurrentBlock() {
         if (currentBlock.length > 0) {
-            results.push({ raw: currentBlock.join("\n"), isBlock: inBlock });
+            results.push({ raw: currentBlock.join("\n"), isBlock: inBlock, isHeuristic: currentIsHeuristic });
             currentBlock = [];
         }
         inBlock = false;
+        currentIsHeuristic = false;
     }
     for (const line of lines) {
-        if (!inBlock && BLOCK_START_RE.test(line)) {
-            // Start a new error block (flush any preceding passthrough).
+        if (!inBlock && KNOWN_ERROR_RE.test(line)) {
+            // Known error block — full pipeline.
             flushCurrentBlock();
             inBlock = true;
+            currentIsHeuristic = false;
+            currentBlock.push(line);
+        }
+        else if (!inBlock && HEURISTIC_ERROR_RE.test(line)) {
+            // Heuristic error block — minimal panel.
+            flushCurrentBlock();
+            inBlock = true;
+            currentIsHeuristic = true;
             currentBlock.push(line);
         }
         else if (inBlock) {
             currentBlock.push(line);
-            // Blank line after ≥3 buffered lines → block ended.
-            if (line.trim() === "" && currentBlock.length >= 3) {
+            // Blank line flush: heuristic blocks only need ≥1 line, known blocks need ≥3.
+            const minLines = currentIsHeuristic ? 1 : 3;
+            if (line.trim() === "" && currentBlock.length >= minLines) {
                 flushCurrentBlock();
             }
             // Safety cap.
@@ -93,7 +128,7 @@ function splitIntoBlocks(rawStderr) {
         }
     }
     if (currentBlock.length > 0) {
-        results.push({ raw: currentBlock.join("\n"), isBlock: inBlock });
+        results.push({ raw: currentBlock.join("\n"), isBlock: inBlock, isHeuristic: currentIsHeuristic });
     }
     return results;
 }
@@ -118,6 +153,7 @@ async function runWrappedCommand(commandParts, verbose = false) {
         const dedupMap = new Map();
         // ── Real-time debounce state (for long-running processes) ──
         let liveBuffer = [];
+        let liveBufferIsHeuristic = false;
         let debounceTimer = null;
         let livePanelRendered = false;
         let processExited = false;
@@ -132,8 +168,10 @@ async function runWrappedCommand(commandParts, verbose = false) {
                 return;
             clearDebounce();
             const block = liveBuffer.join("\n");
+            const wasHeuristic = liveBufferIsHeuristic;
             liveBuffer = [];
-            if (renderBlock(block, dedupMap, verbose)) {
+            liveBufferIsHeuristic = false;
+            if (renderBlock(block, dedupMap, verbose, wasHeuristic)) {
                 livePanelRendered = true;
             }
         }
@@ -160,13 +198,22 @@ async function runWrappedCommand(commandParts, verbose = false) {
             const parts = stderrLineRemainder.split(/\r?\n/);
             stderrLineRemainder = parts.pop() ?? "";
             for (const line of parts) {
-                if (liveBuffer.length === 0 && BLOCK_START_RE.test(line)) {
+                if (liveBuffer.length === 0 && KNOWN_ERROR_RE.test(line)) {
+                    // Known error — full pipeline.
+                    liveBufferIsHeuristic = false;
+                    liveBuffer.push(line);
+                    scheduleLiveFlush();
+                }
+                else if (liveBuffer.length === 0 && HEURISTIC_ERROR_RE.test(line)) {
+                    // Heuristic error — minimal panel.
+                    liveBufferIsHeuristic = true;
                     liveBuffer.push(line);
                     scheduleLiveFlush();
                 }
                 else if (liveBuffer.length > 0) {
                     liveBuffer.push(line);
-                    if (line.trim() === "" && liveBuffer.length >= 3) {
+                    const minLines = liveBufferIsHeuristic ? 1 : 3;
+                    if (line.trim() === "" && liveBuffer.length >= minLines) {
                         flushLiveBuffer();
                     }
                     else if (liveBuffer.length >= MAX_BUFFER_LINES) {
@@ -200,7 +247,7 @@ async function runWrappedCommand(commandParts, verbose = false) {
             let anyPanelRendered = false;
             for (const segment of blocks) {
                 if (segment.isBlock) {
-                    if (renderBlock(segment.raw, dedupMap, verbose)) {
+                    if (renderBlock(segment.raw, dedupMap, verbose, segment.isHeuristic)) {
                         anyPanelRendered = true;
                     }
                 }

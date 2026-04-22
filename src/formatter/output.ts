@@ -165,3 +165,19 @@ function runtimeFromType(type: string): string | undefined {
 
   return map[type];
 }
+
+export function formatUnknownErrorOutput(rawLines: string): string {
+  const lines = rawLines.split(/\r?\n/).filter((l) => l.trim());
+  const firstLine = lines[0]?.trim() ?? "An error occurred";
+  const rest = lines.slice(1).filter((l) => l.trim());
+
+  const output = [chalk.red(`⚠️  ${firstLine}`)];
+
+  if (rest.length > 0) {
+    output.push(chalk.gray(rest.slice(0, 4).join("\n")));
+  }
+
+  output.push(chalk.gray("ℹ️  Unrecognised error — showing raw output"));
+
+  return output.join("\n");
+}

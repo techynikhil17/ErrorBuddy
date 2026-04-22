@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.isVerboseMode = isVerboseMode;
 exports.formatErrorOutput = formatErrorOutput;
 exports.formatSuggestionOutput = formatSuggestionOutput;
+exports.formatUnknownErrorOutput = formatUnknownErrorOutput;
 const chalk_1 = __importDefault(require("chalk"));
 const path_1 = __importDefault(require("path"));
 function isVerboseMode(errorType) {
@@ -102,5 +103,16 @@ function runtimeFromType(type) {
         NodeError: "Node.js",
     };
     return map[type];
+}
+function formatUnknownErrorOutput(rawLines) {
+    const lines = rawLines.split(/\r?\n/).filter((l) => l.trim());
+    const firstLine = lines[0]?.trim() ?? "An error occurred";
+    const rest = lines.slice(1).filter((l) => l.trim());
+    const output = [chalk_1.default.red(`⚠️  ${firstLine}`)];
+    if (rest.length > 0) {
+        output.push(chalk_1.default.gray(rest.slice(0, 4).join("\n")));
+    }
+    output.push(chalk_1.default.gray("ℹ️  Unrecognised error — showing raw output"));
+    return output.join("\n");
 }
 //# sourceMappingURL=output.js.map
