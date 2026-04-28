@@ -8,3 +8,4 @@ dist/
 .npm-cach/
 .npm-cache/
 .test-home/
+.pydeps/

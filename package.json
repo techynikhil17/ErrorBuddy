@@ -26,7 +26,14 @@
   ],
   "author": "M Nikhil",
   "license": "MIT",
-  "repository": "github.com/techynikhil17/errbuddy",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/techynikhil17/errbuddy.git"
+  },
+  "homepage": "https://github.com/techynikhil17/errbuddy#readme",
+  "bugs": {
+    "url": "https://github.com/techynikhil17/errbuddy/issues"
+  },
   "dependencies": {
     "chalk": "^5.3.0",
     "commander": "^12.1.0",
